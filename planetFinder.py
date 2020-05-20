@@ -109,9 +109,9 @@ def decreaseEL(channel):
 def startUpNext(channel):
 	if GPIO.input(channel) == GPIO.LOW:
 		lcd.clear
-		lcd.write_string("Setup Mode:")
+		lcd.write_string(" Setup Mode:")
 		lcd.crlf()
-		lcd.write_string("Adjust Horiz")
+		lcd.write_string("Adjust  Rotation")
 		GPIO.remove_event_detect(selectBtnPin)
 		GPIO.remove_event_detect(incBtnPin)
 		GPIO.remove_event_detect(decBtnPin)
@@ -202,7 +202,5 @@ lcd.crlf()
 lcd.write_string("Mercury")
 time.sleep(2)
 
-message = input("press enter to quit\n\n") #for debugging
-lcd.close(clear=True)
-GPIO.cleanup()
-
+while True:
+	time.sleep(1)
