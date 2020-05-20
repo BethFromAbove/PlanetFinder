@@ -3,7 +3,8 @@ import time
 import RPi.GPIO as GPIO
 from astroquery.jplhorizons import Horizons
 
-count = 0
+inSetUp = True
+planetIndex = 0
 stepperPinsAZ = [7,11,13,15]
 stepperPinsEL = [40, 38, 36, 32]
 selectBtnPin = 33
@@ -13,51 +14,116 @@ mars = 499
 planets = [199, 299, 301, 499, 599, 699, 799, 899, 999]
 planetNames = ["Mercury", "Venus", "Moon", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune", "Pluto"]
 
-def button_callback(channel):
-        print("button pressed")
+def okSelect(channel):
+	global planetIndex
+	global planets
+	global planetNames
+	global stepperPinsAZ
+	global stepperPinsEL
+	if GPIO.input(channel) == GPIO.LOW:
+		eph = getPlanetInfo(planets[planetIndex])
+		percentageArcAZ = (eph['AZ'][0])/360 #find Azimuth
+		percentageArcEL = (eph['EL'][0])/360 #find Elevation
+		stepsNeededAZ = int(percentageArcAZ*512) #512 steps is 360degrees
+		stepsNeededEL = int(percentageArcEL*512) #512 steps is 360degrees
+
+		lcd.clear()
+		lcd.write_string(planetNames[planetIndex])
+		lcd.crlf()
+		lcd.write_string("AZ " + str(int(eph['AZ'][0])) + " EL " + str(int(eph['EL'][0])))
+		time.sleep(1)
+		print("ok button pressed")
+		moveStepper(stepperPinsAZ, stepsNeededAZ)
+		time.sleep(1)
+		if stepsNeededEL < 0:
+			moveStepperBack(stepperPinsEL, -stepsNeededEL)
+		else:
+			moveStepper(stepperPinsEL, stepsNeededEL)
+		time.sleep(3)
+		moveStepperBack(stepperPinsAZ, stepsNeededAZ)
+		if stepsNeededEL < 0:
+			moveStepper(stepperPinsEL, -stepsNeededEL)
+		else:
+			moveStepperBack(stepperPinsEL, stepsNeededEL)
+		time.sleep(1)
+
 
 def incSelect(channel):
-	global count
+	global planetIndex
 	global planetNames
-	count = count + 1
-	print(count)
-	lcd.clear()
-	lcd.write_string(planetNames[count])
-	time.sleep(1)
-
+	if GPIO.input(channel) == GPIO.LOW:
+		if planetIndex < 8:
+			planetIndex = planetIndex + 1
+		lcd.clear()
+		lcd.write_string(planetNames[planetIndex])
+		print("inc button pressed")
+		time.sleep(1)
 
 def decSelect(channel):
-	global count
+	global planetIndex
 	global planetNames
-	if count>0:
-		count=count-1
-	print(count)
+	if GPIO.input(channel) == GPIO.LOW:
+		if planetIndex > 0:
+			planetIndex = planetIndex - 1
+		lcd.clear()
+		lcd.write_string(planetNames[planetIndex])
+		print("dec button pressed")
+		time.sleep(1)
+
+def startUp():
 	lcd.clear()
-	lcd.write_string(planetNames[count])
+	lcd.write_string("Move telescope horizonal")
+	GPIO.add_event_detect(selectBtnPin, GPIO.FALLING, callback=startUpNext, bouncetime=200)
+	GPIO.add_event_detect(incBtnPin, GPIO.FALLING, callback=increaseEL, bouncetime=200)
+	GPIO.add_event_detect(decBtnPin, GPIO.FALLING, callback=decreaseEL, bouncetime=200)
 	time.sleep(1)
 
+def increaseAZ(channel):
+	if GPIO.input(channel) == GPIO.LOW:
+		moveStepper(stepperPinsAZ, 32)
+
+def decreaseAZ(channel):
+	if GPIO.input(channel) == GPIO.LOW:
+		moveStepperBack(stepperPinsAZ, 32)
+
+def increaseEL(channel):
+	if GPIO.input(channel) == GPIO.LOW:
+		moveStepper(stepperPinsEL, 32)
+
+def decreaseEL(channel):
+	if GPIO.input(channel) == GPIO.LOW:
+		moveStepperBack(stepperPinsEL, 32)
+
+def startUpNext(channel):
+	if GPIO.input(channel) == GPIO.LOW:
+		print("startupnext")
+		lcd.clear
+		lcd.write_string("Rotate to face North")
+		GPIO.remove_event_detect(selectBtnPin)
+		GPIO.remove_event_detect(incBtnPin)
+		GPIO.remove_event_detect(decBtnPin)
+		GPIO.add_event_detect(selectBtnPin, GPIO.FALLING, callback=startUpFinish, bouncetime=200)
+		GPIO.add_event_detect(incBtnPin, GPIO.FALLING, callback=increaseAZ, bouncetime=200)
+		GPIO.add_event_detect(decBtnPin, GPIO.FALLING, callback=decreaseAZ, bouncetime=200)
+		time.sleep(1)
+
+def startUpFinish(channel):
+	if GPIO.input(channel) == GPIO.LOW:
+		global inSetUp
+		print("startupFinish")
+		GPIO.remove_event_detect(selectBtnPin)
+		GPIO.remove_event_detect(incBtnPin)
+		GPIO.remove_event_detect(decBtnPin)
+		GPIO.add_event_detect(selectBtnPin, GPIO.FALLING, callback=okSelect, bouncetime=500)#Setup event on falling edge
+		GPIO.add_event_detect(incBtnPin, GPIO.FALLING, callback=incSelect, bouncetime=500)
+		GPIO.add_event_detect(decBtnPin, GPIO.FALLING, callback=decSelect, bouncetime=500)
+		inSetUp = False
+		time.sleep(1)
 
 def getPlanetInfo(planet):
 	obj = Horizons(id=planet, location='000', epochs=None, id_type='majorbody')
 	eph = obj.ephemerides()
 	return eph
-
-
-def findAZ(planet):
-	obj = Horizons(id=planet, location='000', epochs=None, id_type='majorbody')
-	eph = obj.ephemerides()
-	percentageArc = (eph['AZ'][0])/360 #find Azimuth
-	stepsNeeded = int(percentageArc*512) #512 steps is 360degrees
-	print(eph['AZ'][0])
-	return stepsNeeded
-
-def findEL(planet):
-        obj = Horizons(id=planet, location='000', epochs=None, id_type='majorbody')
-        eph = obj.ephemerides()
-        percentageArc = (eph['EL'][0])/360 #find Elevation
-        stepsNeeded = int(percentageArc*512) #512 steps is 360degrees
-        print(eph['EL'][0])
-        return stepsNeeded
 
 def moveStepper(axis, stepsNeeded):
 	halfstep_seq = [
@@ -74,7 +140,25 @@ def moveStepper(axis, stepsNeeded):
 		for halfstep in range(8):
 			for pin in range(4):
 				GPIO.output(axis[pin], halfstep_seq[halfstep][pin])
-			time.sleep(0.001)
+			time.sleep(0.002)
+
+def moveStepperBack(axis, stepsNeeded):
+	halfstep_seq = [
+		[1,0,0,1],
+		[0,0,0,1],
+		[0,0,1,1],
+		[0,0,1,0],
+		[0,1,1,0],
+		[0,1,0,0],
+		[1,1,0,0],
+		[1,0,0,0]
+	]
+	for i in range(stepsNeeded):
+		for halfstep in range(8):
+			for pin in range(4):
+				GPIO.output(axis[pin], halfstep_seq[halfstep][pin])
+			time.sleep(0.002)
+
 
 GPIO.setmode(GPIO.BOARD)
 
@@ -82,36 +166,24 @@ for pin in stepperPinsAZ + stepperPinsEL:
         GPIO.setup(pin, GPIO.OUT)
         GPIO.output(pin,0)
 
+lcd = CharLCD(cols=16, rows=2, dotsize=8, pin_rs=26,  pin_e=24, pins_data=[22, 18, 16, 12], numbering_mode=GPIO.BOARD)
+lcd.clear()
+
 GPIO.setup(selectBtnPin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 GPIO.setup(incBtnPin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 GPIO.setup(decBtnPin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
-GPIO.add_event_detect(selectBtnPin, GPIO.FALLING, callback=button_callback, bouncetime=200)#Setup event on falling edge
-GPIO.add_event_detect(incBtnPin, GPIO.FALLING, callback=incSelect, bouncetime=200)
-GPIO.add_event_detect(decBtnPin, GPIO.FALLING, callback=decSelect, bouncetime=200)
+startUp()
 
-lcd = CharLCD(cols=16, rows=2, dotsize=8, pin_rs=26,  pin_e=24, pins_data=[22, 18, 16, 12], numbering_mode=GPIO.BOARD)
-
-lcd.clear()
-lcd.write_string("Hello world!")
-time.sleep(1)
-
-AZSteps = findAZ(mars)
-print(AZSteps)
-ELSteps = findEL(mars)
-print(ELSteps)
+while inSetUp:
+	time.sleep(1)
 
 lcd.clear()
-lcd.write_string("AZ " + str(AZSteps) + " EL " + str(ELSteps))
+lcd.write_string("Planet Finder")
 time.sleep(1)
-
-#moveStepper(stepperPinsAZ, AZSteps)
-#time.sleep(1)
-#moveStepper(stepperPinsEL, ELSteps)
-#time.sleep(1)
 
 message = input("press enter to quit\n\n")
 
+lcd.close(clear=True)
 GPIO.cleanup()
-
 
