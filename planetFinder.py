@@ -33,19 +33,29 @@ def okSelect(channel):
 		lcd.write_string("AZ " + str(int(eph['AZ'][0])) + " EL " + str(int(eph['EL'][0])))
 		time.sleep(1)
 		print("ok button pressed")
-		moveStepper(stepperPinsAZ, stepsNeededAZ)
+		if stepsNeededAZ > 256:
+			moveStepperBack(stepperPinsAZ, (512-stepsNeededAZ)) #rotates anticlockwise
+		else:
+			moveStepper(stepperPinsAZ, stepsNeededAZ) #rotates clockwise
 		time.sleep(1)
 		if stepsNeededEL < 0:
-			moveStepperBack(stepperPinsEL, -stepsNeededEL)
+			moveStepperBack(stepperPinsEL, -stepsNeededEL) #rotates downwards
 		else:
-			moveStepper(stepperPinsEL, stepsNeededEL)
-		time.sleep(3)
-		moveStepperBack(stepperPinsAZ, stepsNeededAZ)
+			moveStepper(stepperPinsEL, stepsNeededEL) #rotates upwards
+		time.sleep(8)
+		#moves back to starting position
 		if stepsNeededEL < 0:
 			moveStepper(stepperPinsEL, -stepsNeededEL)
 		else:
 			moveStepperBack(stepperPinsEL, stepsNeededEL)
 		time.sleep(1)
+		if stepsNeededAZ > 256:
+			moveStepper(stepperPinsAZ, (512-stepsNeededAZ)) #rotates anticlockwise
+		else:
+			moveStepperBack(stepperPinsAZ, stepsNeededAZ) #rotates clockwise
+		time.sleep(1)
+		lcd.clear()
+		lcd.write_string(planetNames[planetIndex])
 
 
 def incSelect(channel):
@@ -72,7 +82,9 @@ def decSelect(channel):
 
 def startUp():
 	lcd.clear()
-	lcd.write_string("Move telescope horizonal")
+	lcd.write_string("Setup Mode:")
+	lcd.crlf()
+	lcd.write_string("Adjust Vertical")
 	GPIO.add_event_detect(selectBtnPin, GPIO.FALLING, callback=startUpNext, bouncetime=200)
 	GPIO.add_event_detect(incBtnPin, GPIO.FALLING, callback=increaseEL, bouncetime=200)
 	GPIO.add_event_detect(decBtnPin, GPIO.FALLING, callback=decreaseEL, bouncetime=200)
@@ -96,9 +108,10 @@ def decreaseEL(channel):
 
 def startUpNext(channel):
 	if GPIO.input(channel) == GPIO.LOW:
-		print("startupnext")
 		lcd.clear
-		lcd.write_string("Rotate to face North")
+		lcd.write_string("Setup Mode:")
+		lcd.crlf()
+		lcd.write_string("Adjust Horiz")
 		GPIO.remove_event_detect(selectBtnPin)
 		GPIO.remove_event_detect(incBtnPin)
 		GPIO.remove_event_detect(decBtnPin)
@@ -110,7 +123,6 @@ def startUpNext(channel):
 def startUpFinish(channel):
 	if GPIO.input(channel) == GPIO.LOW:
 		global inSetUp
-		print("startupFinish")
 		GPIO.remove_event_detect(selectBtnPin)
 		GPIO.remove_event_detect(incBtnPin)
 		GPIO.remove_event_detect(decBtnPin)
@@ -179,11 +191,18 @@ while inSetUp:
 	time.sleep(1)
 
 lcd.clear()
+lcd.write_string("Welcome to")
+lcd.crlf()
 lcd.write_string("Planet Finder")
-time.sleep(1)
+time.sleep(2)
 
-message = input("press enter to quit\n\n")
+lcd.clear()
+lcd.write_string("Select a planet")
+lcd.crlf()
+lcd.write_string("Mercury")
+time.sleep(2)
 
+message = input("press enter to quit\n\n") #for debugging
 lcd.close(clear=True)
 GPIO.cleanup()
 
